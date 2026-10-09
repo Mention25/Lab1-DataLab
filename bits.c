@@ -146,7 +146,8 @@ NOTES:
  *   Rating: 1
  */
 int signMask(void) {
-  return 1;
+  /* 将最低位的 1 移到最高位 */
+  return 1 << 31;
 }
 
 // P2
@@ -158,7 +159,8 @@ int signMask(void) {
  *   Rating: 2
  */
 int bitXor(int x, int y) {
-	return 2;
+	/* 异或等价于“不能同时为 1，且不能同时为 0” */
+	return ~(x & y) & ~(~x & ~y);
 }
 
 // P3
@@ -170,7 +172,9 @@ int bitXor(int x, int y) {
  *   Rating: 3
  */
 int negativePart(int x){
-  return 3;
+  /* 负数的符号掩码为全 1，非负数的符号掩码为全 0 */
+  int mask = x >> 31;
+  return (~x + 1) & mask;
 }
 
 
@@ -185,7 +189,12 @@ int negativePart(int x){
  *   Rating: 4
  */
 int copyByteWithin(int x, int src, int dst) {
-  return 4;
+  /* 先取出源字节，再清空并覆盖目标字节 */
+  int src8 = src << 3;
+  int dst8 = dst << 3;
+  int copy_byte = (x >> src8) & 0xFF;
+  int mask = 0xFF << dst8;
+  return (x & ~mask) | (copy_byte << dst8);
 }
 
 // P5
@@ -198,7 +207,9 @@ int copyByteWithin(int x, int src, int dst) {
  *   Rating: 4
  */
 int logicalShift(int x, int n) {
-  return 5;
+  /* 用掩码清除算术右移补入的符号位 */
+  int mask = ~(((1 << 31) >> n) << 1);
+  return (x >> n) & mask;
 }
 
 // P6
@@ -210,7 +221,10 @@ int logicalShift(int x, int n) {
  *   Rating: 4
  */
 int swapNibblePairs(int x) {
-  return 6;
+  /* 构造每个字节低四位为 1 的掩码，并交换两组半字节 */
+  int mask = 0x0F | (0x0F << 8);
+  mask = mask | (mask << 16);
+  return ((x & mask) << 4) | ((x >> 4) & mask);
 }
 
 // P7
@@ -223,7 +237,10 @@ int swapNibblePairs(int x) {
  *   Rating: 4
  */
 int secondLowestZeroBit(int x) {
-  return 7;
+  /* 把 0 位视作 1，清除最低的 1 后再提取新的最低位 */
+  int zeros = ~x;
+  int rest = zeros & (zeros + ~0);
+  return rest & (~rest + 1);
 }
 
 // P8
@@ -236,7 +253,13 @@ int secondLowestZeroBit(int x) {
  *   Rating: 5
  */
 int oddParity(int x) {
-  return 8;
+  /* 逐级折叠异或，最低位最终表示全部位的奇偶性 */
+  x = x ^ (x >> 16);
+  x = x ^ (x >> 8);
+  x = x ^ (x >> 4);
+  x = x ^ (x >> 2);
+  x = x ^ (x >> 1);
+  return !(x & 1);
 }
 
 // P9
@@ -249,7 +272,11 @@ int oddParity(int x) {
  *   Rating: 5
  */
 int rotateRightBits(int x, int n) {
-  return 9;
+  /* 位数对 32 取模，并分别拼接逻辑右移和左移部分 */
+  int shift = n & 31;
+  int leftShift = (~shift + 1) & 31;
+  int mask = ~(((1 << 31) >> shift) << 1);
+  return ((x >> shift) & mask) | (x << leftShift);
 }
 
 // P10
@@ -264,7 +291,10 @@ int rotateRightBits(int x, int n) {
  *   Rating: 5
  */
 int roundEvenPow2(int x, int n) {
-  return 10;
+  /* 半程减一作为偏置，商为奇数时再补一，实现中点取偶 */
+  int half = 1 << (n + ~0);
+  int bias = half + ~0 + ((x >> n) & 1);
+  return ((x + bias) >> n) << n;
 }
 
 // P11
@@ -280,7 +310,16 @@ int roundEvenPow2(int x, int n) {
  *   Rating: 5
  */
 int midpointTowardFirst(int x, int y) {
-  return 11;
+  /* 先求向下取整且不溢出的均值，再按参数次序修正半整数 */
+  int different = x ^ y;
+  int floorMean = (x & y) + (different >> 1);
+  int sx = x >> 31;
+  int sy = y >> 31;
+  int signDiff = sx ^ sy;
+  int diff = y + ~x + 1;
+  int xGreater = (sy & ~sx) | (~signDiff & (diff >> 31));
+  int correction = (different & 1) & (xGreater & 1);
+  return floorMean + correction;
 }
 
 
@@ -294,7 +333,19 @@ int midpointTowardFirst(int x, int y) {
  *   Rating: 7
  */
 int isBetweenEitherOrder(int x, int a, int b) {
-  return 12;
+  /* 分别判断 x 是否同时小于两端点或同时大于两端点 */
+  int sx = x >> 31;
+  int sa = a >> 31;
+  int sb = b >> 31;
+  int signXA = sx ^ sa;
+  int signXB = sx ^ sb;
+  int diffXA = x + ~a + 1;
+  int diffXB = x + ~b + 1;
+  int xLessA = ((signXA & sx) | (~signXA & (diffXA >> 31))) & 1;
+  int xLessB = ((signXB & sx) | (~signXB & (diffXB >> 31))) & 1;
+  int xGreaterA = (!xLessA) & !!(x ^ a);
+  int xGreaterB = (!xLessB) & !!(x ^ b);
+  return !((xLessA & xLessB) | (xGreaterA & xGreaterB));
 }
 
 // P13
@@ -307,7 +358,26 @@ int isBetweenEitherOrder(int x, int a, int b) {
  *   Rating: 7
  */
 int mul5Sat(int x) {
-  return 13;
+  /* 与最大安全绝对值比较，溢出时按原符号选择饱和值 */
+  int pattern = (0x99 << 8) | 0x99;
+  int tmin = 1 << 31;
+  int limit;
+  int lower;
+  int sx;
+  int positiveOverflow;
+  int negativeOverflow;
+  int overflow;
+  int saturated;
+  int product = (x << 2) + x;
+  pattern = pattern | (pattern << 16);
+  limit = pattern ^ tmin;
+  lower = ~limit + 1;
+  sx = x >> 31;
+  positiveOverflow = ~sx & ((limit + ~x + 1) >> 31);
+  negativeOverflow = sx & ((x + ~lower + 1) >> 31);
+  overflow = positiveOverflow | negativeOverflow;
+  saturated = tmin ^ ~sx;
+  return (overflow & saturated) | (~overflow & product);
 }
 
 // P14
@@ -320,7 +390,14 @@ int mul5Sat(int x) {
  *   Rating: 7
  */
 int classifyAdd3(int x, int y, int z) {
-  return 14;
+  /* 两次加法的有向溢出量相加，反向溢出会彼此抵消 */
+  int first = x + y;
+  int firstOverflow = (~(x ^ y) & (x ^ first)) >> 31;
+  int firstDirection = firstOverflow & ((x >> 31) | 1);
+  int second = first + z;
+  int secondOverflow = (~(first ^ z) & (first ^ second)) >> 31;
+  int secondDirection = secondOverflow & ((first >> 31) | 1);
+  return firstDirection + secondDirection;
 }
 
 // P15
@@ -337,7 +414,42 @@ int classifyAdd3(int x, int y, int z) {
  *   Rating: 7
  */
 unsigned floatScaleThreeHalves(unsigned uf) {
-  return 15;
+  /* 拆出符号、阶码和尾数，用整数完成乘法与就近取偶 */
+  unsigned sign = uf & 0x80000000u;
+  unsigned exp = (uf >> 23) & 0xFFu;
+  unsigned frac = uf & 0x7FFFFFu;
+  unsigned significand;
+  unsigned product;
+  unsigned result;
+  unsigned remainder;
+
+  if (exp == 0xFFu)
+    return uf;
+
+  if (exp == 0) {
+    product = frac * 3u;
+    result = product >> 1;
+    if ((product & 3u) == 3u)
+      result++;
+    return sign | result;
+  }
+
+  significand = (1u << 23) | frac;
+  product = significand * 3u;
+  if (product < (1u << 25)) {
+    result = product >> 1;
+    if ((product & 3u) == 3u)
+      result++;
+  } else {
+    result = product >> 2;
+    remainder = product & 3u;
+    if (remainder > 2u || (remainder == 2u && (result & 1u)))
+      result++;
+    exp++;
+    if (exp == 0xFFu)
+      return sign | 0x7F800000u;
+  }
+  return sign | (exp << 23) | (result & 0x7FFFFFu);
 }
 
 // P16
@@ -353,7 +465,35 @@ unsigned floatScaleThreeHalves(unsigned uf) {
  *   Rating: 10
  */
 unsigned floatRoundEven(unsigned uf) {
-  return 16;
+  /* 按实际指数定位小数位，比较被舍弃部分与半程值 */
+  unsigned sign = uf & 0x80000000u;
+  unsigned exp = (uf >> 23) & 0xFFu;
+  unsigned frac = uf & 0x7FFFFFu;
+  unsigned shift;
+  unsigned mask;
+  unsigned remainder;
+  unsigned half;
+  unsigned result;
+
+  if (exp == 0xFFu || exp >= 150u)
+    return uf;
+  if (exp < 126u)
+    return sign;
+  if (exp == 126u) {
+    if (frac == 0)
+      return sign;
+    return sign | 0x3F800000u;
+  }
+
+  shift = 150u - exp;
+  mask = (1u << shift) - 1u;
+  remainder = uf & mask;
+  half = 1u << (shift - 1u);
+  result = uf & ~mask;
+  if (remainder > half ||
+      (remainder == half && ((uf >> shift) & 1u)))
+    result += 1u << shift;
+  return result;
 }
 
 // P17
@@ -367,7 +507,49 @@ unsigned floatRoundEven(unsigned uf) {
  *   Rating: 10
  */
 unsigned float_i2f(int x) {
-  return 17;
+  /* 先定位最高有效位，再对需要丢弃的低位执行就近取偶 */
+  unsigned sign = 0;
+  unsigned magnitude;
+  unsigned scan;
+  unsigned exp;
+  unsigned significand;
+  unsigned shift;
+  unsigned remainder;
+  unsigned halfway;
+  int highest = 0;
+
+  if (x == 0)
+    return 0;
+  if (x < 0) {
+    sign = 0x80000000u;
+    magnitude = ~x + 1;
+  } else {
+    magnitude = x;
+  }
+
+  scan = magnitude;
+  while (scan >> 1) {
+    scan >>= 1;
+    highest++;
+  }
+  exp = highest + 127;
+
+  if (highest <= 23) {
+    significand = magnitude << (23 - highest);
+  } else {
+    shift = highest - 23;
+    significand = magnitude >> shift;
+    remainder = magnitude & ((1u << shift) - 1u);
+    halfway = 1u << (shift - 1u);
+    if (remainder > halfway ||
+        (remainder == halfway && (significand & 1u)))
+      significand++;
+    if (significand == (1u << 24)) {
+      significand >>= 1;
+      exp++;
+    }
+  }
+  return sign | (exp << 23) | (significand & 0x7FFFFFu);
 }
 
 
@@ -381,7 +563,19 @@ unsigned float_i2f(int x) {
  *   Rating: 10
  */
 int bitCount(int x) {
-  return 18;
+  /* 用分治法依次统计每 2、4、8、16、32 位中的 1 */
+  int mask1 = 0x55 | (0x55 << 8);
+  int mask2 = 0x33 | (0x33 << 8);
+  int mask4 = 0x0F | (0x0F << 8);
+  mask1 = mask1 | (mask1 << 16);
+  mask2 = mask2 | (mask2 << 16);
+  mask4 = mask4 | (mask4 << 16);
+  x = (x & mask1) + ((x >> 1) & mask1);
+  x = (x & mask2) + ((x >> 2) & mask2);
+  x = (x + (x >> 4)) & mask4;
+  x = x + (x >> 8);
+  x = x + (x >> 16);
+  return x & 0x3F;
 }
 
 // P19
@@ -395,5 +589,18 @@ int bitCount(int x) {
  */
 int bitReverse(int x)
 {
-  return 19;
+  /* 先反转字节内的位，再一次性颠倒四个字节的次序 */
+  int mask4 = 0x0F | (0x0F << 8);
+  int mask2;
+  int mask1;
+  int byteMask;
+  mask4 = mask4 | (mask4 << 16);
+  mask2 = mask4 ^ (mask4 << 2);
+  mask1 = mask2 ^ (mask2 << 1);
+  x = ((x >> 1) & mask1) | ((x & mask1) << 1);
+  x = ((x >> 2) & mask2) | ((x & mask2) << 2);
+  x = ((x >> 4) & mask4) | ((x & mask4) << 4);
+  byteMask = 0xFF << 8;
+  return (x << 24) | ((x & byteMask) << 8) |
+         ((x >> 8) & byteMask) | ((x >> 24) & 0xFF);
 }
